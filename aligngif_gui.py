@@ -1,6 +1,6 @@
 ﻿#!/usr/bin/env python3
 """
-aligngif_gui.py — Generalized GUI for aligngif_core.py
+aligngif_gui.py — Generalized GUI for Alignment.py
 - Unlimited anchors (boxes) with name + weight
 - Methods: FFT / FFT-refine
 - Drag & drop reordering of frames (top = reference frame)
@@ -23,9 +23,8 @@ from typing import List, Optional, Tuple
 
 from PIL import Image, ImageTk
 
-from aligngif_core import Anchor, AlignConfig, align_frames
-
-Box = Tuple[int, int, int, int]
+from core.Alignment import align_frames
+from core.DataModel import Box, Anchor, AlignConfig
 
 
 @dataclass

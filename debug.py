@@ -1,53 +1,82 @@
-﻿from PIL import ImageDraw, ImageFont, Image
+﻿from typing import List
 
-from aligngif_core import Anchor
+from PIL import ImageDraw, ImageFont, Image
+
+from core.DataModel import Anchor, Box
 
 
-def save_anchor_debug_image(
+from typing import List, Optional
+
+from PIL import Image, ImageDraw, ImageFont
+
+from core.DataModel import Anchor
+
+
+def save_debug_image(
     image: Image.Image,
-    anchors: list[Anchor],
-    out_path: str = "anchors_debug.png",
+    anchors: List[Anchor],
+    out_path: str = "debug.png",
+    max_draw: Optional[int] = None,
+    title: str = "",
 ):
     """
-    Saves a copy of the image with anchor boxes drawn on top.
+    Save an image with Anchor boxes drawn on top.
 
-    Each anchor will show:
-      - rectangle outline
-      - name
-      - weight
+    This works for:
+      - manually defined anchors
+      - automatically suggested anchors
+      - debugging alignment regions
+
+    Parameters
+    ----------
+    image:
+        Reference frame image.
+    anchors:
+        List of Anchor objects.
+    out_path:
+        Output PNG filename.
+    max_draw:
+        Draw only the first N anchors (default: all).
+    title:
+        Optional prefix shown in labels.
     """
 
     img = image.copy().convert("RGBA")
     draw = ImageDraw.Draw(img)
 
-    # Try default font (works everywhere)
+    # Default font (portable)
     try:
         font = ImageFont.load_default()
     except:
         font = None
 
-    for i, a in enumerate(anchors):
-        x1, y1, x2, y2 = a.box
+    colors = ["yellow", "lime", "cyan", "magenta", "orange", "red", "white"]
 
-        # Choose color (cycled)
-        colors = ["yellow", "lime", "cyan", "red", "magenta", "orange"]
+    if max_draw is None:
+        max_draw = len(anchors)
+
+    for i, a in enumerate(anchors[:max_draw]):
+        x1, y1, x2, y2 = a.box
         color = colors[i % len(colors)]
 
         # Draw rectangle
         draw.rectangle([x1, y1, x2, y2], outline=color, width=3)
 
         # Label text
-        label = f"{a.name or f'anchor{i+1}'}  w={a.weight}"
+        name = a.name or f"anchor{i+1}"
+        prefix = f"{title} " if title else ""
+        label = f"{prefix}{name}  w={a.weight:g}"
 
-        # Background box behind text
-        text_x, text_y = x1 + 4, y1 + 4
+        tx, ty = x1 + 4, y1 + 4
+
+        # Background behind label
         draw.rectangle(
-            [text_x - 2, text_y - 2, text_x + 160, text_y + 16],
+            [tx - 2, ty - 2, tx + 220, ty + 16],
             fill=(0, 0, 0, 180),
         )
 
-        # Text itself
-        draw.text((text_x, text_y), label, fill=color, font=font)
+        # Label
+        draw.text((tx, ty), label, fill=color, font=font)
 
     img.save(out_path)
-    print(f"✅ Anchor debug image saved: {out_path}")
+    print(f"✅ Debug image saved: {out_path}")

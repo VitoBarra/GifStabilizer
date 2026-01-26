@@ -4,7 +4,8 @@ from pathlib import Path
 
 from PIL import Image
 
-from aligngif_core import Anchor, AlignConfig, align_frames
+from core.Alignment import align_frames
+from core.DataModel import AlignConfig, Anchor
 
 
 def parse_box(vals):

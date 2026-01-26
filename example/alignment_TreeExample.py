@@ -12,9 +12,9 @@ from pathlib import Path
 
 from PIL import Image
 
-from aligngif_core import Anchor, AlignConfig, align_frames
-from debug import save_anchor_debug_image
-
+from core.Alignment import align_frames
+from core.DataModel import Anchor, AlignConfig
+from debug import save_debug_image
 
 # ----------------------------
 # Paths
@@ -51,7 +51,7 @@ anchors = [
 # Save anchor debug overlay
 # ----------------------------
 debug_img_path = EXPORT_PATH / "anchors_debug.png"
-save_anchor_debug_image(images[0], anchors, debug_img_path)
+save_debug_image(images[0], anchors, debug_img_path)
 
 
 # ----------------------------
