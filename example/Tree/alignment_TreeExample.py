@@ -14,28 +14,14 @@ from PIL import Image
 
 from core.Alignment import align_frames
 from core.DataModel import Anchor, AlignConfig
-from debug import save_debug_image
+from example.Tree import frames
+from utility.debug import save_debug_image
 
-# ----------------------------
-# Paths
-# ----------------------------
-EXPORT_PATH = Path("export")
-DATA_PATH = Path("data")
 
+EXPORT_PATH = Path("alignment_export")
 EXPORT_PATH.mkdir(exist_ok=True)
 
 
-# ----------------------------
-# Input frames
-# ----------------------------
-paths = [
-    DATA_PATH / "frame1.png",
-    DATA_PATH / "frame2.png",
-    DATA_PATH / "frame3.png",
-    DATA_PATH / "frame4.png",
-]
-
-images = [Image.open(p).convert("RGBA") for p in paths]
 
 
 # ----------------------------
@@ -51,7 +37,7 @@ anchors = [
 # Save anchor debug overlay
 # ----------------------------
 debug_img_path = EXPORT_PATH / "anchors_debug.png"
-save_debug_image(images[0], anchors, debug_img_path)
+save_debug_image(frames[0], anchors, debug_img_path)
 
 
 # ----------------------------
@@ -92,7 +78,7 @@ print("\n--- Running FFT ---")
 cfg_fft = AlignConfig(method="fft", use_edges=True)
 
 t0 = time.time()
-aligned_fft = align_frames(images, anchors, cfg_fft, progress=progress)
+aligned_fft = align_frames(frames, anchors, cfg_fft, progress=progress)
 print(f"FFT done in {time.time() - t0:.2f}s")
 
 save_gif(aligned_fft, "aligned_fft.gif")
@@ -110,10 +96,10 @@ cfg_ref = AlignConfig(
 )
 
 t0 = time.time()
-aligned_ref = align_frames(images, anchors, cfg_ref, progress=progress)
+aligned_ref = align_frames(frames, anchors, cfg_ref, progress=progress)
 print(f"FFT-refine done in {time.time() - t0:.2f}s")
 
 save_gif(aligned_ref, "aligned_fft_refine.gif")
 
 
-print("\n✅ All outputs saved inside ./export/")
+print("\n done")
