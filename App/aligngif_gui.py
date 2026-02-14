@@ -72,6 +72,12 @@ class App(tk.Tk):
         self.paths: List[str] = []
         self.images: List[Image.Image] = []
 
+        # Padding support (optional)
+        self.pad_enabled = tk.BooleanVar(value=False)   # flag
+        self._orig_images: List[Image.Image] = []       # keep originals for toggle off
+        self._orig_paths: List[str] = []
+        self._pad_target_size: Optional[Tuple[int, int]] = None  # (W,H) when padding enabled
+
         # Reference frame (always images[0])
         self.preview_img: Optional[Image.Image] = None
         self.preview_photo: Optional[ImageTk.PhotoImage] = None
@@ -145,6 +151,128 @@ class App(tk.Tk):
         self._build_ui()
         self._bind_suggest_var_traces()
 
+    # ---------------- Padding helpers ----------------
+
+    def _pad_to_size_edge_replicate(self, img: Image.Image, target_w: int, target_h: int) -> Image.Image:
+        """Pad by extending edge pixels to reach target size (centered)."""
+        w, h = img.size
+        if target_w < w or target_h < h:
+            raise ValueError(f"target {target_w}x{target_h} smaller than image {w}x{h}")
+
+        pad_left = (target_w - w) // 2
+        pad_right = target_w - w - pad_left
+        pad_top = (target_h - h) // 2
+        pad_bottom = target_h - h - pad_top
+
+        out = Image.new(img.mode, (target_w, target_h))
+        out.paste(img, (pad_left, pad_top))
+
+        # top/bottom
+        if pad_top > 0:
+            top = img.crop((0, 0, w, 1)).resize((w, pad_top), Image.NEAREST)
+            out.paste(top, (pad_left, 0))
+        if pad_bottom > 0:
+            bottom = img.crop((0, h - 1, w, h)).resize((w, pad_bottom), Image.NEAREST)
+            out.paste(bottom, (pad_left, pad_top + h))
+
+        # left/right (corners included by sampling from padded canvas)
+        if pad_left > 0:
+            left = out.crop((pad_left, 0, pad_left + 1, target_h)).resize((pad_left, target_h), Image.NEAREST)
+            out.paste(left, (0, 0))
+        if pad_right > 0:
+            right = out.crop((pad_left + w - 1, 0, pad_left + w, target_h)).resize((pad_right, target_h), Image.NEAREST)
+            out.paste(right, (pad_left + w, 0))
+
+        return out
+
+    def _compute_padding_offsets(self, src_w: int, src_h: int, target_w: int, target_h: int) -> Tuple[int, int]:
+        dx = (target_w - src_w) // 2
+        dy = (target_h - src_h) // 2
+        return dx, dy
+
+    def _shift_all_anchor_boxes(self, dx: int, dy: int):
+        if dx == 0 and dy == 0:
+            return
+        for a in self.anchors:
+            if a.box is None:
+                continue
+            x1, y1, x2, y2 = a.box
+            a.box = (x1 + dx, y1 + dy, x2 + dx, y2 + dy)
+
+    def _apply_padding_to_current_images(self):
+        if not self.images:
+            return
+
+        # snapshot originals if missing (or out of sync)
+        if not self._orig_images or len(self._orig_images) != len(self.images):
+            self._orig_images = [im.copy() for im in self.images]
+            self._orig_paths = list(self.paths)
+
+        # target = max size from originals
+        max_w = max(im.size[0] for im in self._orig_images)
+        max_h = max(im.size[1] for im in self._orig_images)
+        self._pad_target_size = (max_w, max_h)
+
+        # shift anchors so they remain at same content location on the reference frame
+        ref_w, ref_h = self._orig_images[0].size
+        dx, dy = self._compute_padding_offsets(ref_w, ref_h, max_w, max_h)
+        self._shift_all_anchor_boxes(dx, dy)
+
+        # rebuild padded images from originals (in current order)
+        padded = [self._pad_to_size_edge_replicate(im, max_w, max_h) for im in self._orig_images]
+        self.images = padded
+        self.paths = list(self._orig_paths)
+
+        self.preview_img = self.images[0] if self.images else None
+        self.refresh_frames_list()
+        self.redraw_selection_preview()
+
+        if self.before_label:
+            self.before_label.config(text="(click Preview)", image="")
+        if self.after_label:
+            self.after_label.config(text="(click Preview)", image="")
+
+    def _remove_padding_restore_originals(self):
+        if not self._orig_images or self._pad_target_size is None:
+            return
+
+        tw, th = self._pad_target_size
+        ref_w, ref_h = self._orig_images[0].size
+        dx, dy = self._compute_padding_offsets(ref_w, ref_h, tw, th)
+
+        # shift anchors back to original coordinate system (reference frame)
+        self._shift_all_anchor_boxes(-dx, -dy)
+
+        # restore originals
+        self.images = [im.copy() for im in self._orig_images]
+        self.paths = list(self._orig_paths)
+        self._pad_target_size = None
+
+        self.preview_img = self.images[0] if self.images else None
+        self.refresh_frames_list()
+        self.redraw_selection_preview()
+
+        if self.before_label:
+            self.before_label.config(text="(click Preview)", image="")
+        if self.after_label:
+            self.after_label.config(text="(click Preview)", image="")
+
+    def on_toggle_padding(self):
+        if not self.images:
+            return
+        self.stop_animation()
+        try:
+            if bool(self.pad_enabled.get()):
+                self._apply_padding_to_current_images()
+                self._set_status("Padding enabled (all frames padded to same size).")
+            else:
+                self._remove_padding_restore_originals()
+                self._set_status("Padding disabled (restored original frames).")
+        except Exception as e:
+            # revert checkbox if something fails
+            self.pad_enabled.set(False)
+            messagebox.showerror("Padding error", str(e))
+
     # ---------------- UI ----------------
 
     def _build_ui(self):
@@ -184,6 +312,13 @@ class App(tk.Tk):
         left = self._left_inner
 
         ttk.Button(left, text="Load images…", command=self.load_images).pack(fill=tk.X)
+
+        ttk.Checkbutton(
+            left,
+            text="Pad frames to same size (edge replicate)",
+            variable=self.pad_enabled,
+            command=self.on_toggle_padding,
+        ).pack(anchor="w", pady=(6, 0))
 
         ttk.Label(left, text="Frames order (drag to reorder) — top = reference").pack(anchor="w", pady=(10, 0))
         self.frames_listbox = tk.Listbox(left, height=10, exportselection=False)
@@ -402,7 +537,6 @@ class App(tk.Tk):
                 use_edges=bool(self.suggest_use_edges.get()),
             )
         except Exception:
-            # don't break UI if user is mid-typing invalid float
             return
 
     def _load_suggest_ui_from_anchor(self, idx: int):
@@ -465,8 +599,8 @@ class App(tk.Tk):
         if not self.frames_listbox:
             return
         self.frames_listbox.delete(0, tk.END)
-        for i, p in enumerate(self.paths):
-            base = p.split("/")[-1].split("\\")[-1]
+        for i, pth in enumerate(self.paths):
+            base = pth.split("/")[-1].split("\\")[-1]
             tag = "  [ref]" if i == 0 else ""
             self.frames_listbox.insert(tk.END, f"{i+1}. {base}{tag}")
 
@@ -495,10 +629,19 @@ class App(tk.Tk):
         if to_idx < 0 or to_idx >= len(self.paths):
             return
 
+        # move current view lists
         path = self.paths.pop(from_idx)
         img = self.images.pop(from_idx)
         self.paths.insert(to_idx, path)
         self.images.insert(to_idx, img)
+
+        # keep originals in the same order (so toggling padding stays consistent)
+        if self._orig_paths and len(self._orig_paths) == len(self.paths):
+            op = self._orig_paths.pop(from_idx)
+            oi = self._orig_images.pop(from_idx)
+            self._orig_paths.insert(to_idx, op)
+            self._orig_images.insert(to_idx, oi)
+
         self._frames_drag_from = to_idx
 
         self.refresh_frames_list()
@@ -518,7 +661,6 @@ class App(tk.Tk):
         idx = len(self.anchors)
         name = default_name if default_name is not None else f"anchor{idx+1}"
 
-        # heuristic defaults for first two common anchors
         if idx == 0 and (default_name or "").lower() in ("title", "sequence", "sequences"):
             sug = SuggestUIState(region="top-right", box_w=520, box_h=170, stride=24, topk=8, lam=2.5, use_edges=True)
         elif idx == 1 and (default_name or "").lower() in ("tree", "bubble"):
@@ -665,7 +807,6 @@ class App(tk.Tk):
             if self.selected_anchor_idx is None:
                 return
             self.anchors[self.selected_anchor_idx].box = box
-            # suggestion settings are already auto-saved by var traces
             self.refresh_anchor_list(select_idx=self.selected_anchor_idx)
             self.redraw_selection_preview()
             self._set_status(f"Suggestion applied: #{idx+1}/{total}  box={box}")
@@ -694,13 +835,26 @@ class App(tk.Tk):
             messagebox.showerror("Error", f"Failed to load images:\n{e}")
             return
 
-        self.preview_img = self.images[0]
+        # reset originals snapshot for this new load
+        self._orig_images = [im.copy() for im in self.images]
+        self._orig_paths = list(self.paths)
+        self._pad_target_size = None
+
+        # clear preview labels
         if self.before_label:
             self.before_label.config(text="(click Preview)", image="")
         if self.after_label:
             self.after_label.config(text="(click Preview)", image="")
-        self._set_status("Images loaded. Drag frames to reorder (top is reference).")
-        self.refresh_frames_list()
+
+        # apply padding immediately if flag is on
+        if bool(self.pad_enabled.get()):
+            self._apply_padding_to_current_images()
+            self._set_status("Images loaded + padded. Drag frames to reorder (top is reference).")
+        else:
+            self.preview_img = self.images[0]
+            self._set_status("Images loaded. Drag frames to reorder (top is reference).")
+            self.refresh_frames_list()
+
         self.after(120, self._freeze_preview_panel_sizes_once)
 
     # ---------------- Selection canvas ----------------
