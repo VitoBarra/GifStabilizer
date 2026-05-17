@@ -1,4 +1,6 @@
-﻿# GifAligner (AlignGIF)
+﻿![GifStabilizer Logo](assets/branding/GifStabilizer-logo.png)
+
+# GifStabilizer
 
 A comprehensive Python toolkit to **align a sequence of image frames** (and export a GIF) using **anchor regions** (ROIs).
 It includes:
@@ -59,6 +61,21 @@ Install:
 pip install -r requirements.txt
 ```
 
+To build portable Windows executables:
+
+```bash
+pip install -r requirements-build.txt
+powershell -ExecutionPolicy Bypass -File .\scripts\build_windows.ps1
+```
+
+To build portable Linux executables:
+
+```bash
+pip install -r requirements-build.txt
+chmod +x ./scripts/build_linux.sh
+./scripts/build_linux.sh
+```
+
 ---
 
 ## Run the GUI
@@ -67,6 +84,12 @@ Start the graphical interface with:
 
 ```bash
 python App/aligngif_gui.py
+```
+
+After packaging, launch:
+
+```bash
+dist\GifStabilizer-GUI.exe
 ```
 
 ### Quick Workflow
@@ -114,6 +137,12 @@ For **batch processing** without the GUI, use the command-line interface:
 
 ```bash
 python App/aligngif_cli.py <frame1> <frame2> ... <frameN> --out <output.gif> [options]
+```
+
+After packaging, use:
+
+```bash
+dist\GifStabilizer-CLI.exe <frame1> <frame2> ... <frameN> --out <output.gif> [options]
 ```
 
 ### CLI Options
@@ -217,9 +246,84 @@ This example shows:
 
 ---
 
+## Portable Windows Build
+
+You can generate standalone Windows artifacts that run without Python installed.
+
+Build steps:
+
+```bash
+pip install -r requirements.txt
+pip install -r requirements-build.txt
+powershell -ExecutionPolicy Bypass -File .\scripts\build_windows.ps1
+```
+
+Outputs:
+
+- `dist/GifStabilizer-GUI.exe` — desktop GUI build
+- `dist/GifStabilizer-CLI.exe` — command-line build
+
+Notes:
+
+- The Windows build is a single self-contained `.exe`.
+- The generated artifacts are Windows-specific. Build on the target OS if you need another platform.
+- First launch may be slower because the bundled runtime is unpacked and initialized.
+
+## Portable Linux Build
+
+You can also generate standalone Linux artifacts on a Linux machine.
+
+Build steps:
+
+```bash
+pip install -r requirements.txt
+pip install -r requirements-build.txt
+chmod +x ./scripts/build_linux.sh
+./scripts/build_linux.sh
+```
+
+Outputs:
+
+- `dist/GifStabilizer-GUI` — desktop GUI build
+- `dist/GifStabilizer-CLI` — command-line build
+
+Notes:
+
+- Build on Linux for Linux. PyInstaller does not cross-compile Windows and Linux binaries from one host.
+- On Linux, the GUI build depends on Tk being available during the build. In CI this is installed automatically.
+- The Linux build is a single self-contained executable.
+
+## GitHub CI Releases
+
+The repository now includes [build-release.yml](F:\User\Documenti\Projects\Git\VitoBarra\Python\gifAligner\.github\workflows\build-release.yml).
+
+Behavior:
+
+- Every manual run builds Windows and Linux artifacts and stores them in the workflow run.
+- Pushing a tag like `v1.0.0` builds both platforms and publishes the archives to a GitHub Release.
+
+Produced release files:
+
+- `GifStabilizer-windows-x64.zip`
+- `GifStabilizer-linux-x64.tar.gz`
+
+Branding assets:
+
+- `assets/branding/GifStabilizer-logo.png` - source project logo
+- `assets/branding/GifStabilizer-logo.ico` - Windows executable icon
+
+To publish a release:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+---
+
 ## Demo: Before vs After Alignment
 
-Here is a simple demonstration of what **GifAligner** can achieve.
+Here is a simple demonstration of what **GifStabilizer** can achieve.
 
 ### Before vs After Alignment
 
@@ -232,4 +336,3 @@ Here is a simple demonstration of what **GifAligner** can achieve.
 ![aligned GIF](Docs/Tree_aligned.gif)
 
 As you can see, the content becomes visually stable once the anchor-based alignment is applied.
-

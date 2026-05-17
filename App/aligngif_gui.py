@@ -18,6 +18,8 @@ Requires:
 
 import threading
 import tkinter as tk
+from pathlib import Path
+import sys
 from dataclasses import dataclass, field
 from tkinter import filedialog, messagebox, ttk
 from typing import List, Optional, Tuple
@@ -58,6 +60,11 @@ def _cycle_color(i: int) -> str:
     return colors[i % len(colors)]
 
 
+def _resource_path(*parts: str) -> Path:
+    base_dir = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
+    return base_dir.joinpath(*parts)
+
+
 # -----------------------------
 # App
 # -----------------------------
@@ -65,7 +72,9 @@ def _cycle_color(i: int) -> str:
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("AlignGIF GUI")
+        self.title("GifStabilizer GUI")
+        self._app_icon: Optional[tk.PhotoImage] = None
+        self._set_app_icon()
         self.geometry("1600x900")
 
         # Frames
@@ -150,6 +159,16 @@ class App(tk.Tk):
 
         self._build_ui()
         self._bind_suggest_var_traces()
+
+    def _set_app_icon(self):
+        icon_path = _resource_path("assets", "branding", "GifStabilizer-logo.png")
+        if not icon_path.exists():
+            return
+        try:
+            self._app_icon = tk.PhotoImage(file=str(icon_path))
+            self.iconphoto(True, self._app_icon)
+        except Exception:
+            self._app_icon = None
 
     # ---------------- Padding helpers ----------------
 
